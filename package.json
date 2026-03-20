@@ -9,12 +9,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000",
+    "dev:server": "npm --prefix server run dev",
+    "dev:all": "concurrently -n client,server -c blue,green \"npm run dev\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "install:server": "npm install --prefix server"
   },
   "dependencies": {
+    "socket.io-client": "^4.7.2",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "lucide-react": "^0.546.0",
