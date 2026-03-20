@@ -1,5 +1,5 @@
 {
-  "name": "Color Slide Prototype",
-  "description": "A puzzle game prototype where sliding a button moves all buttons of the same color, and clicking a button copies an adjacent color.",
+  "name": "Coupled Colors",
+  "description": "A two-player cooperative sliding puzzle where each player sees the same blocks in different color pairings, and every move affects both boards.",
   "requestFramePermissions": []
 }

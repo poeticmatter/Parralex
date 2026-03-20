@@ -1,4 +1,4 @@
-# Color Slide
+# Coupled Colors
 
 A two-player cooperative sliding puzzle. Both players share the same board state but see it through different color lenses — and every move you make affects your partner's view too.
 

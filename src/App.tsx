@@ -16,7 +16,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white font-sans selection:bg-transparent">
-      <h1 className="text-4xl font-bold mb-8 tracking-tight">Color Slide</h1>
+      <h1 className="text-4xl font-bold mb-8 tracking-tight">Coupled Colors</h1>
 
       {isWin && (
         <p className="mb-6 text-green-400 text-lg font-semibold tracking-wide">Puzzle solved!</p>
