@@ -1,7 +1,11 @@
 {
-  "name": "color-slide",
+  "name": "coupled-colors",
   "private": true,
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/poeticmatter/CoupledColors"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000",

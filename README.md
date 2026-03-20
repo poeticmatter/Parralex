@@ -1,5 +1,7 @@
 # Coupled Colors
 
+[github.com/poeticmatter/CoupledColors](https://github.com/poeticmatter/CoupledColors)
+
 A two-player cooperative sliding puzzle. Both players share the same board state but see it through different color lenses — and every move you make affects your partner's view too.
 
 ## Rules
