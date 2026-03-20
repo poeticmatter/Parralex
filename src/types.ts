@@ -1,4 +1,4 @@
-export type Color = 'red' | 'blue' | 'green';
+export type Color = 'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'orange';
 export type EntityType = 'button' | 'block';
 
 export interface Entity {
@@ -14,6 +14,13 @@ export interface Target {
   x: number;
   y: number;
   color: Color;
+}
+
+/** Target for the 2-player game — color is determined per-board from blockId. */
+export interface BlockTarget {
+  blockId: number; // 1–6
+  x: number;
+  y: number;
 }
 
 export interface LevelData {
