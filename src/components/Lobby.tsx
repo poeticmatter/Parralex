@@ -5,10 +5,11 @@ interface Props {
 export function Lobby({ onCreateGame }: Props) {
   return (
     <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white font-sans gap-6">
-      <h1 className="text-5xl font-bold tracking-tight">Coupled Colors</h1>
+      <h1 className="text-5xl font-bold tracking-tight">Hex Duel</h1>
       <p className="text-neutral-400 text-center max-w-sm leading-relaxed text-sm">
-        A cooperative 2-player sliding puzzle.<br />
-        Each player sees the same blocks through different color pairings.
+        A 2-player competitive game on a diamond hex grid.<br />
+        Player 1 drives all characters north/south. Player 2 drives east/west.<br />
+        Both players move the same 4 characters — but with different dice pairings.
       </p>
       <button
         onClick={onCreateGame}

@@ -1,35 +1,38 @@
-import { useState, useCallback } from 'react';
-import { useMultiplayerGame } from './hooks/useMultiplayerGame';
-import { GameBoard } from './components/GameBoard';
-import { Lobby } from './components/Lobby';
+import { useState, useCallback, useMemo } from 'react'
+import { useHexGame } from './hooks/useHexGame'
+import { HexBoard } from './components/HexBoard'
+import { AssignmentPanel } from './components/AssignmentPanel'
+import { Lobby } from './components/Lobby'
+import type { PlayerAssignment, MovementArrow } from './types'
+import { resolveOnePlayerMovement, computeMovementArrows } from './lib/hexGameLogic'
 
 function generateRoomCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
 // ── Utility screens ───────────────────────────────────────────────────────────
 
 function StatusScreen({ message }: { message: string }) {
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white font-sans gap-4">
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white gap-4">
       <p className="text-neutral-400 text-lg">{message}</p>
       <button
-        onClick={() => { window.location.href = window.location.pathname; }}
+        onClick={() => { window.location.href = window.location.pathname }}
         className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm text-neutral-300 transition-colors"
       >
         Back to Lobby
       </button>
     </div>
-  );
+  )
 }
 
 function WaitingForPartner({ roomCode }: { roomCode: string }) {
-  const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+  const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white font-sans gap-6">
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white gap-6">
       <h2 className="text-2xl font-semibold">Waiting for Player 2…</h2>
-      <p className="text-neutral-400 text-sm">Share this link with your partner:</p>
+      <p className="text-neutral-400 text-sm">Share this link with your opponent:</p>
       <div className="flex gap-2 items-center">
         <code className="bg-neutral-800 px-4 py-2 rounded-lg text-neutral-200 text-sm select-all">
           {shareUrl}
@@ -43,103 +46,110 @@ function WaitingForPartner({ roomCode }: { roomCode: string }) {
       </div>
       <p className="text-neutral-600 text-xs font-mono">Room: {roomCode}</p>
     </div>
-  );
+  )
 }
 
-// ── Game view (rendered once both players are connected) ──────────────────────
+// ── Game view ─────────────────────────────────────────────────────────────────
 
 function GameView({ roomCode, playerRole }: { roomCode: string; playerRole: 1 | 2 }) {
-  const {
-    p1Entities, p2Entities, targets, isWin,
-    status, errorMsg,
-    handlePointerDown, handlePointerUp, handlePointerCancel,
-    resetLevel, newLevel,
-  } = useMultiplayerGame(roomCode, playerRole);
+  const { gameState, status, errorMsg, waitingForPartnerConfirm, confirmAssignment } =
+    useHexGame(roomCode, playerRole)
 
-  if (status === 'connecting')          return <StatusScreen message="Connecting…" />;
-  if (status === 'error')               return <StatusScreen message={errorMsg ?? 'Something went wrong.'} />;
-  if (status === 'disconnected')        return <StatusScreen message="Your partner disconnected." />;
-  if (status === 'waiting_for_partner') return <WaitingForPartner roomCode={roomCode} />;
-  if (status === 'waiting_for_level')   return <StatusScreen message="Loading puzzle…" />;
+  const [draftAssignment, setDraftAssignment] = useState<PlayerAssignment | null>(null)
+
+  const predictiveArrows = useMemo((): MovementArrow[] => {
+    if (!draftAssignment || !gameState || waitingForPartnerConfirm) return []
+    const after = resolveOnePlayerMovement(
+      gameState.characters, playerRole, draftAssignment, gameState.diceValues, gameState.obstacles,
+    )
+    return computeMovementArrows(gameState.characters, after)
+  }, [draftAssignment, gameState, playerRole, waitingForPartnerConfirm])
+
+  if (status === 'connecting')          return <StatusScreen message="Connecting…" />
+  if (status === 'error')               return <StatusScreen message={errorMsg ?? 'Connection error.'} />
+  if (status === 'disconnected')        return <StatusScreen message="Your opponent disconnected." />
+  if (status === 'waiting_for_partner') return <WaitingForPartner roomCode={roomCode} />
+  if (status === 'waiting_for_level')   return <StatusScreen message="Joining game…" />
+  if (!gameState)                       return <StatusScreen message="Loading…" />
+
+  const isP1 = playerRole === 1
 
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white font-sans selection:bg-transparent">
-      <h1 className="text-4xl font-bold mb-8 tracking-tight">Coupled Colors</h1>
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white gap-5 p-4 font-sans">
+      {/* Header */}
+      <div className="flex items-center gap-5 flex-wrap justify-center">
+        <h1 className="text-2xl font-bold tracking-tight">Hex Duel</h1>
+        <span className="text-neutral-500 text-sm">Round {gameState.round}</span>
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+          isP1
+            ? 'bg-green-900/50 text-green-400 border border-green-800'
+            : 'bg-blue-900/50  text-blue-400  border border-blue-800'
+        }`}>
+          {isP1 ? 'Player 1 — North/South' : 'Player 2 — East/West'}
+        </span>
+      </div>
 
-      {isWin && (
-        <p className="mb-6 text-green-400 text-lg font-semibold tracking-wide">Puzzle solved!</p>
+      {/* Win goal reminder */}
+      <p className="text-xs text-neutral-600 text-center">
+        {isP1
+          ? 'Get all 4 characters to the north or south edges to win.'
+          : 'Get all 4 characters to the east or west edges to win.'}
+      </p>
+
+      {/* Hex board */}
+      <HexBoard
+        characters={gameState.characters}
+        obstacles={gameState.obstacles}
+        movementArrows={gameState.movementArrows}
+        predictiveArrows={predictiveArrows}
+        winner={gameState.winner}
+        playerRole={playerRole}
+      />
+
+      {/* Assignment panel or win screen */}
+      {gameState.winner ? (
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-lg font-semibold">
+            {gameState.winner === playerRole ? '🎉 You win!' : 'Opponent wins.'}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm text-neutral-300 transition-colors"
+          >
+            Play Again
+          </button>
+        </div>
+      ) : (
+        <div className="w-full max-w-lg" key={gameState.round}>
+          <AssignmentPanel
+            playerRole={playerRole}
+            diceValues={gameState.diceValues}
+            onConfirm={confirmAssignment}
+            onAssignmentChange={setDraftAssignment}
+            waitingForPartner={waitingForPartnerConfirm}
+          />
+        </div>
       )}
-
-      <div className="flex gap-12 items-start">
-        {/* Player 1 board — dim label when local user is P2 */}
-        <div className="flex flex-col items-center gap-3">
-          <h2 className={`text-lg font-semibold ${playerRole === 1 ? 'text-white' : 'text-neutral-500'}`}>
-            {playerRole === 1 ? 'Player 1 (You)' : 'Player 1'}
-          </h2>
-          <GameBoard
-            player={1}
-            entities={p1Entities}
-            targets={targets}
-            isSolved={isWin}
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
-          />
-        </div>
-
-        {/* Player 2 board */}
-        <div className="flex flex-col items-center gap-3">
-          <h2 className={`text-lg font-semibold ${playerRole === 2 ? 'text-white' : 'text-neutral-500'}`}>
-            {playerRole === 2 ? 'Player 2 (You)' : 'Player 2'}
-          </h2>
-          <GameBoard
-            player={2}
-            entities={p2Entities}
-            targets={targets}
-            isSolved={isWin}
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
-          />
-        </div>
-      </div>
-
-      <div className="mt-8 flex gap-4">
-        <button
-          onClick={resetLevel}
-          className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors text-sm font-medium text-neutral-300"
-        >
-          Reset
-        </button>
-        {/* New level controls are host-only — P2 sees no difficulty buttons */}
-        {playerRole === 1 && (
-          <>
-            <button onClick={() => newLevel('easy')}   className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors text-sm font-medium text-neutral-300">Easy</button>
-            <button onClick={() => newLevel('medium')} className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors text-sm font-medium text-neutral-300">Medium</button>
-            <button onClick={() => newLevel('hard')}   className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors text-sm font-medium text-neutral-300">Hard</button>
-          </>
-        )}
-      </div>
     </div>
-  );
+  )
 }
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [roomInfo, setRoomInfo] = useState<{ code: string; role: 1 | 2 } | null>(() => {
-    const code = new URLSearchParams(window.location.search).get('room');
-    return code ? { code: code.toUpperCase(), role: 2 } : null;
-  });
+    const code = new URLSearchParams(window.location.search).get('room')
+    return code ? { code: code.toUpperCase(), role: 2 } : null
+  })
 
   const handleCreateGame = useCallback(() => {
-    const code = generateRoomCode();
-    const url = new URL(window.location.href);
-    url.searchParams.set('room', code);
-    history.replaceState(null, '', url.toString());
-    setRoomInfo({ code, role: 1 });
-  }, []);
+    const code = generateRoomCode()
+    const url = new URL(window.location.href)
+    url.searchParams.set('room', code)
+    history.replaceState(null, '', url.toString())
+    setRoomInfo({ code, role: 1 })
+  }, [])
 
-  if (!roomInfo) return <Lobby onCreateGame={handleCreateGame} />;
-  return <GameView roomCode={roomInfo.code} playerRole={roomInfo.role} />;
+  if (!roomInfo) return <Lobby onCreateGame={handleCreateGame} />
+  return <GameView roomCode={roomInfo.code} playerRole={roomInfo.role} />
 }
