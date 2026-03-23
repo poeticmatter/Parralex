@@ -1,15 +1,14 @@
 import { motion } from 'motion/react'
 import type { Character, CharId, MovementArrow, HexCoord } from '../types'
-import { hexToPixel, hexPolygonPoints, GRID_SIZE } from '../lib/hexGrid'
+import { hexToPixel, hexPolygonPoints, HEX_RADIUS, getAllHexes } from '../lib/hexGrid'
 import { P1_CHAR_PAIRS, P2_CHAR_PAIRS } from '../lib/hexGameLogic'
 
-const HEX_SIZE = 14
-const PADDING = 24
+const HEX_SIZE = 20
+const PADDING = 28
 
-// Two colors per player — pair 0 = cyan, pair 1 = orange
 const PAIR_COLORS = [
-  { fill: '#06b6d4', glow: '#06b6d460' },
-  { fill: '#f97316', glow: '#f9731660' },
+  { fill: '#06b6d4', glow: '#06b6d460' }, // cyan   — pair 0
+  { fill: '#f97316', glow: '#f9731660' }, // orange — pair 1
 ]
 
 function getCharColor(charId: CharId, playerRole: 1 | 2) {
@@ -17,46 +16,28 @@ function getCharColor(charId: CharId, playerRole: 1 | 2) {
   return PAIR_COLORS[pairs[0].includes(charId) ? 0 : 1]
 }
 
-// Pre-compute SVG dimensions from grid bounds once at module load
-function computeBoardLayout() {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  const h = (Math.sqrt(3) / 2) * HEX_SIZE
+// Board SVG dimensions: hex-shaped board of radius HEX_RADIUS centered at origin
+const SVG_WIDTH  = (3 * HEX_RADIUS + 2) * HEX_SIZE + PADDING * 2
+const SVG_HEIGHT = Math.sqrt(3) * HEX_SIZE * (2 * HEX_RADIUS + 1) + PADDING * 2
+const OFFSET_X   = SVG_WIDTH / 2
+const OFFSET_Y   = SVG_HEIGHT / 2
 
-  for (let q = 0; q < GRID_SIZE; q++) {
-    for (let r = 0; r < GRID_SIZE; r++) {
-      const { x, y } = hexToPixel(q, r, HEX_SIZE)
-      minX = Math.min(minX, x - HEX_SIZE)
-      minY = Math.min(minY, y - h)
-      maxX = Math.max(maxX, x + HEX_SIZE)
-      maxY = Math.max(maxY, y + h)
-    }
-  }
+const ALL_HEXES = getAllHexes()
 
-  return {
-    width:   maxX - minX + PADDING * 2,
-    height:  maxY - minY + PADDING * 2,
-    offsetX: -minX + PADDING,
-    offsetY: -minY + PADDING,
-  }
-}
-
-const LAYOUT = computeBoardLayout()
+// ── Arrow rendering ───────────────────────────────────────────────────────────
 
 function renderArrow(
   arrow: MovementArrow,
-  offsetX: number,
-  offsetY: number,
   playerRole: 1 | 2,
   predictive: boolean,
 ) {
   const from = hexToPixel(arrow.fromQ, arrow.fromR, HEX_SIZE)
   const to   = hexToPixel(arrow.toQ,   arrow.toR,   HEX_SIZE)
-  const fx = from.x + offsetX
-  const fy = from.y + offsetY
-  const tx = to.x + offsetX
-  const ty = to.y + offsetY
+  const fx = from.x + OFFSET_X
+  const fy = from.y + OFFSET_Y
+  const tx = to.x + OFFSET_X
+  const ty = to.y + OFFSET_Y
 
-  // Shorten endpoint so the line doesn't run under the arrowhead
   const dx = tx - fx
   const dy = ty - fy
   const len = Math.sqrt(dx * dx + dy * dy)
@@ -65,23 +46,22 @@ function renderArrow(
   const ey = len > shorten ? ty - (dy / len) * shorten : ty
 
   const { fill } = getCharColor(arrow.charId, playerRole)
-  const markerId = predictive
-    ? `arrowhead-predictive-${arrow.charId}`
-    : `arrowhead-${arrow.charId}`
+  const markerId = predictive ? `arrowhead-p-${arrow.charId}` : `arrowhead-${arrow.charId}`
 
   return (
     <line
       key={`${predictive ? 'p' : 'r'}-${arrow.charId}`}
-      x1={fx} y1={fy}
-      x2={ex} y2={ey}
+      x1={fx} y1={fy} x2={ex} y2={ey}
       stroke={fill}
       strokeWidth={predictive ? 1.5 : 2}
-      strokeOpacity={predictive ? 0.55 : 0.8}
+      strokeOpacity={predictive ? 0.5 : 0.8}
       strokeDasharray={predictive ? '4 3' : undefined}
       markerEnd={`url(#${markerId})`}
     />
   )
 }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
   characters: Character[]
@@ -94,12 +74,11 @@ interface Props {
 
 export function HexBoard({ characters, obstacles, movementArrows, predictiveArrows, winner, playerRole }: Props) {
   const obstacleKeys = new Set(obstacles.map(o => `${o.q},${o.r}`))
-  const { width, height, offsetX, offsetY } = LAYOUT
 
   return (
-    <div className="relative select-none" style={{ width, height }}>
-      <svg width={width} height={height} className="absolute inset-0">
-        {/* Arrowhead markers — solid (result) and semi-transparent (predictive) */}
+    <div className="relative select-none" style={{ width: SVG_WIDTH, height: SVG_HEIGHT }}>
+      <svg width={SVG_WIDTH} height={SVG_HEIGHT} className="absolute inset-0">
+        {/* Arrowhead markers */}
         <defs>
           {(['A', 'B', 'C', 'D'] as CharId[]).map(id => {
             const { fill } = getCharColor(id, playerRole)
@@ -108,8 +87,8 @@ export function HexBoard({ characters, obstacles, movementArrows, predictiveArro
                 <marker id={`arrowhead-${id}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                   <path d="M 0 0 L 6 3 L 0 6 Z" fill={fill} />
                 </marker>
-                <marker id={`arrowhead-predictive-${id}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                  <path d="M 0 0 L 6 3 L 0 6 Z" fill={fill} fillOpacity="0.55" />
+                <marker id={`arrowhead-p-${id}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M 0 0 L 6 3 L 0 6 Z" fill={fill} fillOpacity="0.5" />
                 </marker>
               </g>
             )
@@ -117,68 +96,41 @@ export function HexBoard({ characters, obstacles, movementArrows, predictiveArro
         </defs>
 
         {/* Hex cells */}
-        {Array.from({ length: GRID_SIZE }, (_, q) =>
-          Array.from({ length: GRID_SIZE }, (_, r) => {
-            const { x, y } = hexToPixel(q, r, HEX_SIZE)
-            const cx = x + offsetX
-            const cy = y + offsetY
+        {ALL_HEXES.map(({ q, r }) => {
+          const { x, y } = hexToPixel(q, r, HEX_SIZE)
+          const cx = x + OFFSET_X
+          const cy = y + OFFSET_Y
+          const isObstacle = obstacleKeys.has(`${q},${r}`)
 
-            const isNorth = r === 0
-            const isSouth = r === GRID_SIZE - 1
-            const isWest  = q === 0
-            const isEast  = q === GRID_SIZE - 1
-            const isObstacle = obstacleKeys.has(`${q},${r}`)
-
-            let fill = '#1a1a1a'
-            if (isObstacle)                                        fill = '#312820'
-            else if ((isNorth || isSouth) && !isWest && !isEast)  fill = '#122012'
-            else if ((isWest || isEast) && !isNorth && !isSouth)  fill = '#101020'
-            else if (isNorth || isSouth || isWest || isEast)      fill = '#181818'
-
-            return (
+          return (
+            <g key={`${q},${r}`}>
               <polygon
-                key={`${q},${r}`}
                 points={hexPolygonPoints(cx, cy, HEX_SIZE - 1)}
-                fill={fill}
+                fill={isObstacle ? '#312820' : '#1a1a1a'}
                 stroke={isObstacle ? '#5a4030' : '#2a2a2a'}
                 strokeWidth={isObstacle ? 1 : 0.8}
               />
-            )
-          })
-        )}
+              <text
+                x={cx} y={cy + 1}
+                textAnchor="middle" dominantBaseline="middle"
+                fontSize={5} fill="#555" pointerEvents="none"
+              >
+                {q},{r}
+              </text>
+            </g>
+          )
+        })}
 
-        {/* Movement arrows from previous round — solid */}
-        {movementArrows.map(arrow => renderArrow(arrow, offsetX, offsetY, playerRole, false))}
-
-        {/* Predictive arrows for current draft assignment — dashed */}
-        {predictiveArrows.map(arrow => renderArrow(arrow, offsetX, offsetY, playerRole, true))}
-
-        {/* Edge labels */}
-        <text x={width / 2} y={13} textAnchor="middle" fill="#4ade80" fontSize="9" fontWeight="700" letterSpacing="1">
-          PLAYER 1 — NORTH
-        </text>
-        <text x={width / 2} y={height - 3} textAnchor="middle" fill="#4ade80" fontSize="9" fontWeight="700" letterSpacing="1">
-          PLAYER 1 — SOUTH
-        </text>
-        <text
-          x={9} y={height / 2} textAnchor="middle" fill="#60a5fa" fontSize="9" fontWeight="700" letterSpacing="1"
-          transform={`rotate(-90, 9, ${height / 2})`}
-        >
-          P2 WEST
-        </text>
-        <text
-          x={width - 9} y={height / 2} textAnchor="middle" fill="#60a5fa" fontSize="9" fontWeight="700" letterSpacing="1"
-          transform={`rotate(90, ${width - 9}, ${height / 2})`}
-        >
-          P2 EAST
-        </text>
+        {/* Arrows */}
+        {movementArrows.map(a => renderArrow(a, playerRole, false))}
+        {predictiveArrows.map(a => renderArrow(a, playerRole, true))}
       </svg>
 
-      {/* Animated character tokens */}
+      {/* Character tokens */}
       {characters.map(char => {
         const { x, y } = hexToPixel(char.q, char.r, HEX_SIZE)
-        const cx = x + offsetX
-        const cy = y + offsetY
+        const cx = x + OFFSET_X
+        const cy = y + OFFSET_Y
         const tokenSize = HEX_SIZE * 1.1
         const { fill, glow } = getCharColor(char.id, playerRole)
 
@@ -199,7 +151,7 @@ export function HexBoard({ characters, obstacles, movementArrows, predictiveArro
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 800,
-              fontSize: 8,
+              fontSize: 9,
               color: 'white',
               zIndex: 10,
               pointerEvents: 'none',
@@ -217,7 +169,7 @@ export function HexBoard({ characters, obstacles, movementArrows, predictiveArro
           style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
         >
           <div className={`text-2xl font-bold px-6 py-3 rounded-xl ${
-            winner === 1 ? 'text-green-300 bg-green-900/60' : 'text-blue-300 bg-blue-900/60'
+            winner === 1 ? 'text-cyan-300 bg-cyan-900/60' : 'text-orange-300 bg-orange-900/60'
           }`}>
             Player {winner} wins!
           </div>

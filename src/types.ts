@@ -1,5 +1,7 @@
 export type CharId = 'A' | 'B' | 'C' | 'D'
-export type DieLabel = 'A' | 'B' | 'C' | 'D'
+
+/** One of three movement cards a player can assign to a pair. */
+export type CardOption = 1 | 2 | 3
 
 export interface HexCoord {
   q: number
@@ -12,19 +14,12 @@ export interface Character {
   r: number
 }
 
-export interface DicePairAssignment {
-  /** Which of the player's 2 character pairs does this dice pair target? */
-  targetCharPairIndex: 0 | 1
-  /** Which die in this pair is the direction die (other is distance) */
-  directionDie: DieLabel
-}
-
 export interface PlayerAssignment {
-  pair0: DicePairAssignment
-  pair1: DicePairAssignment
+  /** Card assigned to this player's pair 0 */
+  pair0Card: CardOption
+  /** Card assigned to this player's pair 1 */
+  pair1Card: CardOption
 }
-
-export type GamePhase = 'assignment'
 
 export interface MovementArrow {
   charId: CharId
@@ -36,16 +31,12 @@ export interface MovementArrow {
 
 export interface GameState {
   characters: Character[]
-  diceValues: Record<DieLabel, number>
-  phase: GamePhase
-  /** P1's confirmed assignment this round (null until confirmed) */
+  phase: 'assignment'
   p1Assignment: PlayerAssignment | null
   p2Assignment: PlayerAssignment | null
   round: number
   winner: 1 | 2 | null
-  /** Arrows showing movement from the previous round; cleared on next resolution */
   movementArrows: MovementArrow[]
-  /** Impassable hexes; generated once at game start and never changed */
   obstacles: HexCoord[]
 }
 

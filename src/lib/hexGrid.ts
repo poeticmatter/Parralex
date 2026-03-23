@@ -1,35 +1,49 @@
-export const GRID_SIZE = 20
+/** Radius of the hex-shaped board in hex steps from center. */
+export const HEX_RADIUS = 7
 
 /**
- * Direction vectors in axial coordinates for flat-top hexagons.
- * Flat-top means the hex has flat edges at top and bottom, so "up" is unambiguous.
- * Directions are clockwise from up: 1=up, 2=upper-right, 3=lower-right,
- * 4=down, 5=lower-left, 6=upper-left.
+ * Axial distance between two hexes.
+ * Uses the cube-coordinate formula: (|Δq| + |Δr| + |Δ(q+r)|) / 2.
+ */
+export function hexDistance(aq: number, ar: number, bq: number, br: number): number {
+  return (Math.abs(aq - bq) + Math.abs(ar - br) + Math.abs((aq + ar) - (bq + br))) / 2
+}
+
+/** True if (q, r) is within the playable hex-shaped board. */
+export function isOnBoard(q: number, r: number): boolean {
+  return hexDistance(0, 0, q, r) <= HEX_RADIUS
+}
+
+/** All hexes on the board, in row-major order. */
+export function getAllHexes(): HexCoord[] {
+  const hexes: HexCoord[] = []
+  for (let q = -HEX_RADIUS; q <= HEX_RADIUS; q++) {
+    const rMin = Math.max(-HEX_RADIUS, -q - HEX_RADIUS)
+    const rMax = Math.min(HEX_RADIUS, -q + HEX_RADIUS)
+    for (let r = rMin; r <= rMax; r++) {
+      hexes.push({ q, r })
+    }
+  }
+  return hexes
+}
+
+interface HexCoord { q: number; r: number }
+
+/**
+ * The 6 axial direction vectors for flat-top hexagons, clockwise from up.
+ * 1=up, 2=upper-right, 3=lower-right, 4=down, 5=lower-left, 6=upper-left.
  */
 export const HEX_DIRECTIONS: Record<number, { dq: number; dr: number }> = {
-  1: { dq: 0,  dr: -1 }, // up
-  2: { dq: 1,  dr: -1 }, // upper-right
-  3: { dq: 1,  dr: 0  }, // lower-right
-  4: { dq: 0,  dr: 1  }, // down
-  5: { dq: -1, dr: 1  }, // lower-left
-  6: { dq: -1, dr: 0  }, // upper-left
-}
-
-export const DIRECTION_NAMES: Record<number, string> = {
-  1: '↑ Up',
-  2: '↗ Upper-right',
-  3: '↘ Lower-right',
-  4: '↓ Down',
-  5: '↙ Lower-left',
-  6: '↖ Upper-left',
-}
-
-export function isOnBoard(q: number, r: number): boolean {
-  return q >= 0 && q < GRID_SIZE && r >= 0 && r < GRID_SIZE
+  1: { dq: 0,  dr: -1 },
+  2: { dq: 1,  dr: -1 },
+  3: { dq: 1,  dr: 0  },
+  4: { dq: 0,  dr: 1  },
+  5: { dq: -1, dr: 1  },
+  6: { dq: -1, dr: 0  },
 }
 
 /**
- * Pixel center of hex (q, r) for flat-top hexagons.
+ * Pixel center of hex (q, r) relative to board center, for flat-top hexagons.
  * size = distance from center to any vertex.
  */
 export function hexToPixel(q: number, r: number, size: number): { x: number; y: number } {
@@ -42,13 +56,12 @@ export function hexToPixel(q: number, r: number, size: number): { x: number; y: 
 /** SVG polygon points string for a flat-top hexagon centered at (cx, cy). */
 export function hexPolygonPoints(cx: number, cy: number, size: number): string {
   const h = (Math.sqrt(3) / 2) * size
-  const corners: [number, number][] = [
-    [cx + size,     cy      ],
-    [cx + size / 2, cy + h  ],
-    [cx - size / 2, cy + h  ],
-    [cx - size,     cy      ],
-    [cx - size / 2, cy - h  ],
-    [cx + size / 2, cy - h  ],
-  ]
-  return corners.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ')
+  return [
+    [cx + size,     cy    ],
+    [cx + size / 2, cy + h],
+    [cx - size / 2, cy + h],
+    [cx - size,     cy    ],
+    [cx - size / 2, cy - h],
+    [cx + size / 2, cy - h],
+  ].map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ')
 }

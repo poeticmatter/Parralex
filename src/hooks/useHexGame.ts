@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Peer, { DataConnection } from 'peerjs'
 import type { GameState, PlayerAssignment, ConnectionStatus } from '../types'
-import { rollAllDice, getInitialCharacters, generateObstacles, resolveMovement, checkWinner, computeMovementArrows } from '../lib/hexGameLogic'
+import { getInitialCharacters, generateObstacles, resolveMovement, checkWinner, computeMovementArrows } from '../lib/hexGameLogic'
 
 type PeerMessage =
   | { type: 'GAME_STATE'; state: GameState }
@@ -10,7 +10,6 @@ type PeerMessage =
 function buildInitialState(): GameState {
   return {
     characters: getInitialCharacters(),
-    diceValues: rollAllDice(),
     phase: 'assignment',
     p1Assignment: null,
     p2Assignment: null,
@@ -27,21 +26,17 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [waitingForPartnerConfirm, setWaitingForPartnerConfirm] = useState(false)
 
-  // All mutable cross-render state in a single ref so peer event handlers
-  // always see current values without needing to re-run the effect.
   const live = useRef({
     state: null as GameState | null,
     conn: null as DataConnection | null,
     pendingP2Assignment: null as PlayerAssignment | null,
   })
 
-  // Keep live.state in sync with React state
   const syncState = useCallback((next: GameState) => {
     live.current.state = next
     setGameState(next)
   }, [])
 
-  // Compute next round state, broadcast to partner (P1 only), reset local UI
   const resolveRound = useCallback((p1a: PlayerAssignment, p2a: PlayerAssignment) => {
     const current = live.current.state
     if (!current) return
@@ -51,7 +46,6 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
     const winner = checkWinner(newChars)
     const nextState: GameState = {
       characters: newChars,
-      diceValues: rollAllDice(),
       phase: 'assignment',
       p1Assignment: null,
       p2Assignment: null,
@@ -76,8 +70,7 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
     const onError = (msg: string) => { setErrorMsg(msg); setStatus('error') }
 
     if (playerRole === 1) {
-      const initial = buildInitialState()
-      syncState(initial)
+      syncState(buildInitialState())
 
       peer.on('open', () => setStatus('waiting_for_partner'))
 
@@ -96,7 +89,6 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
 
           live.current.pendingP2Assignment = msg.assignment
           const current = live.current.state
-          // If P1 already confirmed, resolve immediately; otherwise wait
           if (current?.p1Assignment) {
             resolveRound(current.p1Assignment, msg.assignment)
           }
@@ -149,12 +141,9 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
 
       const p2Assignment = live.current.pendingP2Assignment
       if (p2Assignment) {
-        // P2 already confirmed — resolve immediately
         resolveRound(assignment, p2Assignment)
       } else {
-        // Store P1's assignment in state and wait for P2
-        const updated: GameState = { ...current, p1Assignment: assignment }
-        syncState(updated)
+        syncState({ ...current, p1Assignment: assignment })
         setWaitingForPartnerConfirm(true)
       }
     } else {
@@ -163,11 +152,5 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
     }
   }, [playerRole, syncState, resolveRound])
 
-  return {
-    gameState,
-    status,
-    errorMsg,
-    waitingForPartnerConfirm,
-    confirmAssignment,
-  }
+  return { gameState, status, errorMsg, waitingForPartnerConfirm, confirmAssignment }
 }

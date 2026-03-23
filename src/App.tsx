@@ -60,7 +60,7 @@ function GameView({ roomCode, playerRole }: { roomCode: string; playerRole: 1 | 
   const predictiveArrows = useMemo((): MovementArrow[] => {
     if (!draftAssignment || !gameState || waitingForPartnerConfirm) return []
     const after = resolveOnePlayerMovement(
-      gameState.characters, playerRole, draftAssignment, gameState.diceValues, gameState.obstacles,
+      gameState.characters, playerRole, draftAssignment, gameState.obstacles,
     )
     return computeMovementArrows(gameState.characters, after)
   }, [draftAssignment, gameState, playerRole, waitingForPartnerConfirm])
@@ -72,7 +72,9 @@ function GameView({ roomCode, playerRole }: { roomCode: string; playerRole: 1 | 
   if (status === 'waiting_for_level')   return <StatusScreen message="Joining game…" />
   if (!gameState)                       return <StatusScreen message="Loading…" />
 
-  const isP1 = playerRole === 1
+  const winGoal = playerRole === 1
+    ? 'Get A adjacent to C, or D adjacent to B.'
+    : 'Get C adjacent to D, or B adjacent to A.'
 
   return (
     <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center text-white gap-5 p-4 font-sans">
@@ -80,23 +82,17 @@ function GameView({ roomCode, playerRole }: { roomCode: string; playerRole: 1 | 
       <div className="flex items-center gap-5 flex-wrap justify-center">
         <h1 className="text-2xl font-bold tracking-tight">Hex Duel</h1>
         <span className="text-neutral-500 text-sm">Round {gameState.round}</span>
-        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
-          isP1
-            ? 'bg-green-900/50 text-green-400 border border-green-800'
-            : 'bg-blue-900/50  text-blue-400  border border-blue-800'
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+          playerRole === 1
+            ? 'bg-cyan-900/50 text-cyan-400 border-cyan-800'
+            : 'bg-orange-900/50 text-orange-400 border-orange-800'
         }`}>
-          {isP1 ? 'Player 1 — North/South' : 'Player 2 — East/West'}
+          Player {playerRole}
         </span>
       </div>
 
-      {/* Win goal reminder */}
-      <p className="text-xs text-neutral-600 text-center">
-        {isP1
-          ? 'Get all 4 characters to the north or south edges to win.'
-          : 'Get all 4 characters to the east or west edges to win.'}
-      </p>
+      <p className="text-xs text-neutral-600">{winGoal}</p>
 
-      {/* Hex board */}
       <HexBoard
         characters={gameState.characters}
         obstacles={gameState.obstacles}
@@ -106,7 +102,6 @@ function GameView({ roomCode, playerRole }: { roomCode: string; playerRole: 1 | 
         playerRole={playerRole}
       />
 
-      {/* Assignment panel or win screen */}
       {gameState.winner ? (
         <div className="flex flex-col items-center gap-4">
           <p className="text-lg font-semibold">
@@ -123,7 +118,6 @@ function GameView({ roomCode, playerRole }: { roomCode: string; playerRole: 1 | 
         <div className="w-full max-w-lg" key={gameState.round}>
           <AssignmentPanel
             playerRole={playerRole}
-            diceValues={gameState.diceValues}
             onConfirm={confirmAssignment}
             onAssignmentChange={setDraftAssignment}
             waitingForPartner={waitingForPartnerConfirm}
