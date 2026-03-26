@@ -7,19 +7,35 @@ export type Role = 'chaser' | 'evader'
 
 export type PredictionQuality = 'none' | 'partial' | 'full'
 
-/** A submitted plan for one turn: 2-step move + prediction of opponent's 2-step move. */
+export interface GameSettings {
+  gridType: 'hex' | 'square'
+  moveSteps: 1 | 2
+  predictionTarget: 'direction' | 'destination'
+  predictionOutcome: 'symmetric' | 'asymmetric'
+}
+
+export const DEFAULT_SETTINGS: GameSettings = {
+  gridType: 'hex',
+  moveSteps: 2,
+  predictionTarget: 'direction',
+  predictionOutcome: 'symmetric',
+}
+
+/** A submitted plan for one turn. */
 export interface TurnPlan {
   moveStep1: HexCoord
-  moveStep2: HexCoord
+  moveStep2?: HexCoord      // absent in 1-step mode
   predictStep1: HexCoord
-  predictStep2: HexCoord
+  predictStep2?: HexCoord   // absent in 1-step mode
+  bonusMove?: HexCoord      // evader only, asymmetric mode; executed only if prediction hit
 }
 
 export interface ResolutionSummary {
-  chaserPredQuality: PredictionQuality          // chaser predicting evader
-  evaderPredQuality: PredictionQuality          // evader predicting chaser
-  chaserCancelledSteps: [boolean, boolean]      // which of chaser's steps were cancelled (by evader's prediction)
-  evaderCancelledSteps: [boolean, boolean]      // which of evader's steps were cancelled (by chaser's prediction)
+  chaserPredQuality: PredictionQuality
+  evaderPredQuality: PredictionQuality
+  chaserCancelledSteps: [boolean, boolean]
+  evaderCancelledSteps: [boolean, boolean]
+  evaderBonusUsed?: boolean  // asymmetric mode only
 }
 
 export interface GameState {
@@ -34,6 +50,7 @@ export interface GameState {
   p1Plan: TurnPlan | null   // p1 = chaser
   p2Plan: TurnPlan | null   // p2 = evader
   lastResolution: ResolutionSummary | null
+  settings: GameSettings
 }
 
 export type ConnectionStatus =

@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Peer, { DataConnection } from 'peerjs'
-import type { GameState, TurnPlan, ConnectionStatus } from '../types'
+import type { GameState, TurnPlan, ConnectionStatus, GameSettings } from '../types'
+import { DEFAULT_SETTINGS } from '../types'
 import { getInitialPositions, generateObstacles, resolveRound } from '../lib/hexGameLogic'
 
 type PeerMessage =
   | { type: 'GAME_STATE'; state: GameState }
   | { type: 'SUBMIT_PLAN'; plan: TurnPlan }
 
-function buildInitialState(): GameState {
+function buildInitialState(settings: GameSettings): GameState {
   const { chaserPos, evaderPos } = getInitialPositions()
   return {
     chaserPos,
@@ -17,14 +18,15 @@ function buildInitialState(): GameState {
     phase: 'planning',
     turn: 1,
     winner: null,
-    obstacles: generateObstacles(chaserPos, evaderPos),
+    obstacles: generateObstacles(chaserPos, evaderPos, settings.gridType),
     p1Plan: null,
     p2Plan: null,
     lastResolution: null,
+    settings,
   }
 }
 
-export function useHexGame(roomCode: string, playerRole: 1 | 2) {
+export function useHexGame(roomCode: string, playerRole: 1 | 2, hostSettings?: GameSettings) {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [gameState, setGameState] = useState<GameState | null>(null)
@@ -61,7 +63,7 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
     const onError = (msg: string) => { setErrorMsg(msg); setStatus('error') }
 
     if (playerRole === 1) {
-      syncState(buildInitialState())
+      syncState(buildInitialState(hostSettings ?? DEFAULT_SETTINGS))
       peer.on('open', () => setStatus('waiting_for_partner'))
 
       peer.on('connection', (conn: DataConnection) => {
@@ -121,7 +123,7 @@ export function useHexGame(roomCode: string, playerRole: 1 | 2) {
       live.current.conn?.close()
       peer.destroy()
     }
-  }, [roomCode, playerRole, syncState, resolveRoundAndSync])
+  }, [roomCode, playerRole, syncState, resolveRoundAndSync])  // hostSettings intentionally excluded — fixed at session start
 
   const submitPlan = useCallback((plan: TurnPlan) => {
     if (playerRole === 1) {

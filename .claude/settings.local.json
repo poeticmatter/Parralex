@@ -3,7 +3,8 @@
     "allow": [
       "Bash(grep -E \"\\\\.\\(tsx|ts|json|css\\)$\")",
       "Bash(cd:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|json\\)$\")"
     ]
   }
 }
