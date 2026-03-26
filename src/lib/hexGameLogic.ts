@@ -21,6 +21,15 @@ export function obstacleSet(obstacles: HexCoord[]): Set<string> {
   return new Set(obstacles.map(h => `${h.q},${h.r}`))
 }
 
+const SQUARE_DIAGONAL_OFFSETS = [
+  { dq: 1, dr: 1 }, { dq: 1, dr: -1 },
+  { dq: -1, dr: 1 }, { dq: -1, dr: -1 },
+]
+
+function wouldTouchDiagonally(hex: HexCoord, placed: Set<string>): boolean {
+  return SQUARE_DIAGONAL_OFFSETS.some(({ dq, dr }) => placed.has(`${hex.q + dq},${hex.r + dr}`))
+}
+
 function wouldMakeClusterOfThree(
   hex: HexCoord,
   placed: Set<string>,
@@ -54,10 +63,14 @@ export function generateObstacles(
   const radius = gridType === 'square' ? SQUARE_RADIUS : HEX_RADIUS
 
   const candidates = allCells.filter(({ q, r }) => {
-    const notNearEdge   = cellDistance(0, 0, q, r, gridType) < radius
+    // For square grids use Chebyshev distance so only the literal perimeter row/column
+    // is excluded, rather than the much larger Manhattan "diamond" region.
+    const notOnPerimeter = gridType === 'square'
+      ? Math.max(Math.abs(q), Math.abs(r)) < SQUARE_RADIUS
+      : cellDistance(0, 0, q, r, gridType) < radius
     const clearOfChaser = cellDistance(q, r, chaserPos.q, chaserPos.r, gridType) > 2
     const clearOfEvader = cellDistance(q, r, evaderPos.q, evaderPos.r, gridType) > 2
-    return notNearEdge && clearOfChaser && clearOfEvader
+    return notOnPerimeter && clearOfChaser && clearOfEvader
   })
 
   // Fisher-Yates shuffle
@@ -73,6 +86,7 @@ export function generateObstacles(
   for (const hex of candidates) {
     if (result.length >= target) break
     if (wouldMakeClusterOfThree(hex, placed, directions)) continue
+    if (gridType === 'square' && wouldTouchDiagonally(hex, placed)) continue
     placed.add(`${hex.q},${hex.r}`)
     result.push(hex)
   }
@@ -92,6 +106,30 @@ export function validNeighbors(
   return Object.values(directions)
     .map(({ dq, dr }) => ({ q: pos.q + dq, r: pos.r + dr }))
     .filter(({ q, r }) => isOnAnyBoard(q, r, gridType) && !blocked.has(`${q},${r}`))
+}
+
+/** All cells reachable from pos in 1 or 2 steps (respects moveSteps). Excludes pos itself. */
+export function reachableDestinations(
+  pos: HexCoord,
+  blocked: Set<string>,
+  gridType: 'hex' | 'square' = 'hex',
+  moveSteps: 1 | 2 = 2,
+): HexCoord[] {
+  const step1Cells = validNeighbors(pos, blocked, gridType)
+  if (moveSteps === 1) return step1Cells
+  const startKey = `${pos.q},${pos.r}`
+  const reached = new Set<string>(step1Cells.map(h => `${h.q},${h.r}`))
+  const result = [...step1Cells]
+  for (const mid of step1Cells) {
+    for (const h of validNeighbors(mid, blocked, gridType)) {
+      const key = `${h.q},${h.r}`
+      if (key !== startKey && !reached.has(key)) {
+        reached.add(key)
+        result.push(h)
+      }
+    }
+  }
+  return result
 }
 
 /** Direction index between two adjacent cells, or null if not adjacent. */
@@ -150,8 +188,12 @@ function matchedSteps(
   return [match1, match2]
 }
 
-function qualityFromMatches(cancelled: [boolean, boolean], moveSteps: 1 | 2 = 2): PredictionQuality {
-  if (moveSteps === 1) return cancelled[0] ? 'full' : 'none'
+function qualityFromMatches(
+  cancelled: [boolean, boolean],
+  moveSteps: 1 | 2 = 2,
+  predictionTarget: 'direction' | 'destination' = 'direction',
+): PredictionQuality {
+  if (moveSteps === 1 || predictionTarget === 'destination') return cancelled[0] ? 'full' : 'none'
   const count = (cancelled[0] ? 1 : 0) + (cancelled[1] ? 1 : 0)
   if (count === 2) return 'full'
   if (count === 1) return 'partial'
@@ -159,6 +201,29 @@ function qualityFromMatches(cancelled: [boolean, boolean], moveSteps: 1 | 2 = 2)
 }
 
 // ── Movement ──────────────────────────────────────────────────────────────
+
+/**
+ * Finds a valid intermediate cell between start and a 2-step-away destination.
+ * Returns the first unblocked neighbor of start that is also a neighbor of destination.
+ */
+function findIntermediateCell(
+  start: HexCoord,
+  destination: HexCoord,
+  blocked: Set<string>,
+  gridType: 'hex' | 'square',
+): HexCoord | null {
+  const directions = getDirections(gridType)
+  for (const { dq, dr } of Object.values(directions)) {
+    const mid = { q: start.q + dq, r: start.r + dr }
+    if (!isOnAnyBoard(mid.q, mid.r, gridType)) continue
+    if (blocked.has(`${mid.q},${mid.r}`)) continue
+    const destIsAdjacentToMid = Object.values(directions).some(
+      ({ dq: dq2, dr: dr2 }) => mid.q + dq2 === destination.q && mid.r + dr2 === destination.r,
+    )
+    if (destIsAdjacentToMid) return mid
+  }
+  return null
+}
 
 function stepOne(
   pos: HexCoord,
@@ -178,6 +243,7 @@ function stepOne(
 /**
  * Execute a planned path with per-step cancellation.
  * Cancelled steps are skipped; remaining steps still execute.
+ * In destination mode, step1Target may be 2 steps away — an intermediate cell is found automatically.
  * Returns the sequence of positions actually visited (0–2 entries, 0–1 in 1-step mode).
  */
 function executePath(
@@ -187,6 +253,7 @@ function executePath(
   cancelled: [boolean, boolean],
   blocked: Set<string>,
   gridType: 'hex' | 'square' = 'hex',
+  predictionTarget: 'direction' | 'destination' = 'direction',
 ): HexCoord[] {
   const directions = getDirections(gridType)
   const dir1 = directionBetween(startPos, step1Target, directions)
@@ -195,9 +262,23 @@ function executePath(
   const visited: HexCoord[] = []
   let pos = startPos
 
-  if (!cancelled[0] && dir1 !== null) {
-    pos = stepOne(pos, dir1, blocked, gridType)
-    visited.push(pos)
+  if (!cancelled[0]) {
+    if (dir1 !== null) {
+      pos = stepOne(pos, dir1, blocked, gridType)
+      visited.push(pos)
+    } else if (predictionTarget === 'destination') {
+      // Destination is 2 steps away — find an intermediate cell and take both steps
+      const mid = findIntermediateCell(pos, step1Target, blocked, gridType)
+      if (mid) {
+        visited.push(mid)
+        pos = mid
+        const dirToDestination = directionBetween(pos, step1Target, directions)
+        if (dirToDestination !== null) {
+          pos = stepOne(pos, dirToDestination, blocked, gridType)
+          visited.push(pos)
+        }
+      }
+    }
   }
 
   if (!cancelled[1] && dir2 !== null) {
@@ -241,17 +322,18 @@ function resolveRoundSymmetric(
     settings,
   )
 
+  const { predictionTarget } = settings
   const chaserBlocked = new Set([...baseBlocked, `${evaderPos.q},${evaderPos.r}`])
-  const chaserPath = executePath(chaserPos, p1Plan.moveStep1, p1Plan.moveStep2, chaserCancelledSteps, chaserBlocked, gridType)
+  const chaserPath = executePath(chaserPos, p1Plan.moveStep1, p1Plan.moveStep2, chaserCancelledSteps, chaserBlocked, gridType, predictionTarget)
   const newChaserPos = chaserPath.length > 0 ? chaserPath[chaserPath.length - 1] : chaserPos
 
   const evaderBlocked = new Set([...baseBlocked, `${newChaserPos.q},${newChaserPos.r}`])
-  const evaderPath = executePath(evaderPos, p2Plan.moveStep1, p2Plan.moveStep2, evaderCancelledSteps, evaderBlocked, gridType)
+  const evaderPath = executePath(evaderPos, p2Plan.moveStep1, p2Plan.moveStep2, evaderCancelledSteps, evaderBlocked, gridType, predictionTarget)
   const newEvaderPos = evaderPath.length > 0 ? evaderPath[evaderPath.length - 1] : evaderPos
 
   const resolution: ResolutionSummary = {
-    chaserPredQuality: qualityFromMatches(evaderCancelledSteps, moveSteps),
-    evaderPredQuality: qualityFromMatches(chaserCancelledSteps, moveSteps),
+    chaserPredQuality: qualityFromMatches(evaderCancelledSteps, moveSteps, predictionTarget),
+    evaderPredQuality: qualityFromMatches(chaserCancelledSteps, moveSteps, predictionTarget),
     chaserCancelledSteps,
     evaderCancelledSteps,
   }
@@ -286,13 +368,14 @@ function resolveRoundAsymmetric(
   const chaserCancelledSteps: [boolean, boolean] = [false, false]
 
   // Chaser moves normally (evader prediction cannot cancel chaser)
+  const { predictionTarget } = settings
   const chaserBlocked = new Set([...baseBlocked, `${evaderPos.q},${evaderPos.r}`])
-  const chaserPath = executePath(chaserPos, p1Plan.moveStep1, p1Plan.moveStep2, chaserCancelledSteps, chaserBlocked, gridType)
+  const chaserPath = executePath(chaserPos, p1Plan.moveStep1, p1Plan.moveStep2, chaserCancelledSteps, chaserBlocked, gridType, predictionTarget)
   const newChaserPos = chaserPath.length > 0 ? chaserPath[chaserPath.length - 1] : chaserPos
 
   // Evader moves with their steps potentially cancelled by chaser
   const evaderBlocked = new Set([...baseBlocked, `${newChaserPos.q},${newChaserPos.r}`])
-  const evaderPath = executePath(evaderPos, p2Plan.moveStep1, p2Plan.moveStep2, evaderCancelledSteps, evaderBlocked, gridType)
+  const evaderPath = executePath(evaderPos, p2Plan.moveStep1, p2Plan.moveStep2, evaderCancelledSteps, evaderBlocked, gridType, predictionTarget)
   let newEvaderPos = evaderPath.length > 0 ? evaderPath[evaderPath.length - 1] : evaderPos
 
   // Bonus move: if evader predicted correctly and pre-committed a bonus move
@@ -313,8 +396,8 @@ function resolveRoundAsymmetric(
   }
 
   const resolution: ResolutionSummary = {
-    chaserPredQuality: qualityFromMatches(evaderCancelledSteps, moveSteps),
-    evaderPredQuality: qualityFromMatches(evaderPredMatches, moveSteps),
+    chaserPredQuality: qualityFromMatches(evaderCancelledSteps, moveSteps, predictionTarget),
+    evaderPredQuality: qualityFromMatches(evaderPredMatches, moveSteps, predictionTarget),
     chaserCancelledSteps,
     evaderCancelledSteps,
     evaderBonusUsed,

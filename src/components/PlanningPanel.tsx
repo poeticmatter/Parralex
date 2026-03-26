@@ -18,19 +18,21 @@ export interface DraftPlan {
 }
 
 export function isDraftComplete(draft: DraftPlan, settings: GameSettings, isChaser: boolean): boolean {
+  const useStep2 = settings.moveSteps === 2 && settings.predictionTarget !== 'destination'
   if (!draft.moveStep1 || !draft.predictStep1) return false
-  if (settings.moveSteps === 2 && (!draft.moveStep2 || !draft.predictStep2)) return false
+  if (useStep2 && (!draft.moveStep2 || !draft.predictStep2)) return false
   if (!isChaser && settings.predictionOutcome === 'asymmetric' && !draft.bonusMove) return false
   return true
 }
 
 export function draftToTurnPlan(draft: DraftPlan, settings: GameSettings, isChaser: boolean): TurnPlan | null {
   if (!isDraftComplete(draft, settings, isChaser)) return null
+  const useStep2 = settings.moveSteps === 2 && settings.predictionTarget !== 'destination'
   return {
     moveStep1: draft.moveStep1!,
-    ...(settings.moveSteps === 2 && draft.moveStep2 ? { moveStep2: draft.moveStep2 } : {}),
+    ...(useStep2 && draft.moveStep2 ? { moveStep2: draft.moveStep2 } : {}),
     predictStep1: draft.predictStep1!,
-    ...(settings.moveSteps === 2 && draft.predictStep2 ? { predictStep2: draft.predictStep2 } : {}),
+    ...(useStep2 && draft.predictStep2 ? { predictStep2: draft.predictStep2 } : {}),
     ...(!isChaser && settings.predictionOutcome === 'asymmetric' && draft.bonusMove
       ? { bonusMove: draft.bonusMove }
       : {}),
@@ -47,8 +49,8 @@ function qualityLabel(q: PredictionQuality): { text: string; color: string } {
   }
 }
 
-function cancelledDesc(cancelled: [boolean, boolean], moveSteps: 1 | 2): string {
-  if (moveSteps === 1) {
+function cancelledDesc(cancelled: [boolean, boolean], settings: GameSettings): string {
+  if (settings.moveSteps === 1 || settings.predictionTarget === 'destination') {
     return cancelled[0] ? 'Fully predicted — no movement' : 'Not predicted — full movement'
   }
   if (cancelled[0] && cancelled[1]) return 'Fully predicted — no movement'
@@ -79,7 +81,6 @@ function ResolutionBanner({ resolution, isChaser, settings }: ResolutionBannerPr
   const oppLabel = qualityLabel(oppPredQuality)
 
   const isAsymmetric = settings.predictionOutcome === 'asymmetric'
-  const moveSteps = settings.moveSteps
 
   return (
     <div className="rounded-xl border border-neutral-700 bg-neutral-800/50 p-3 text-xs flex flex-col gap-2">
@@ -95,7 +96,7 @@ function ResolutionBanner({ resolution, isChaser, settings }: ResolutionBannerPr
           <p className="text-neutral-400 text-right">
             {isAsymmetric && !isChaser
               ? evaderBonusUsed ? 'Bonus move triggered' : 'Bonus move blocked'
-              : cancelledDesc(oppCancelled, moveSteps)
+              : cancelledDesc(oppCancelled, settings)
             }
           </p>
         )}
@@ -111,7 +112,7 @@ function ResolutionBanner({ resolution, isChaser, settings }: ResolutionBannerPr
           <p className="text-neutral-400 text-right">
             {isAsymmetric && isChaser
               ? evaderBonusUsed ? 'Evader used bonus move' : 'Evader bonus blocked'
-              : cancelledDesc(myCancelled, moveSteps)
+              : cancelledDesc(myCancelled, settings)
             }
           </p>
         )}
@@ -129,6 +130,11 @@ const PHASE_LABELS: Record<PlanningPhase, string> = {
   predict_step2: 'Predict opponent step 2',
   bonus_move:    'Pre-commit bonus move',
   ready:         'Ready to confirm',
+}
+
+const DEST_PHASE_LABELS: Partial<Record<PlanningPhase, string>> = {
+  move_step1:    'Click your destination',
+  predict_step1: 'Predict opponent destination',
 }
 
 interface StepIndicatorProps {
@@ -160,17 +166,20 @@ function buildSteps(
   isChaser: boolean,
   planningPhase: PlanningPhase,
 ): { label: string; done: boolean; active: boolean }[] {
+  const isDestMode = settings.predictionTarget === 'destination'
+  const useStep2 = settings.moveSteps === 2 && !isDestMode
+
   const steps: { label: string; done: boolean; active: boolean }[] = [
-    { label: 'Move step 1', done: !!draft.moveStep1, active: planningPhase === 'move_step1' },
+    { label: isDestMode ? 'Move destination' : 'Move step 1', done: !!draft.moveStep1, active: planningPhase === 'move_step1' },
   ]
 
-  if (settings.moveSteps === 2) {
+  if (useStep2) {
     steps.push({ label: 'Move step 2', done: !!draft.moveStep2, active: planningPhase === 'move_step2' })
   }
 
-  steps.push({ label: 'Predict opp step 1', done: !!draft.predictStep1, active: planningPhase === 'predict_step1' })
+  steps.push({ label: isDestMode ? 'Predict opp destination' : 'Predict opp step 1', done: !!draft.predictStep1, active: planningPhase === 'predict_step1' })
 
-  if (settings.moveSteps === 2) {
+  if (useStep2) {
     steps.push({ label: 'Predict opp step 2', done: !!draft.predictStep2, active: planningPhase === 'predict_step2' })
   }
 
@@ -240,7 +249,10 @@ export function PlanningPanel({
       {/* Planning steps */}
       <div className="rounded-xl border border-neutral-700 bg-neutral-800/40 p-3 flex flex-col gap-2">
         <p className="text-xs text-neutral-400 font-semibold text-center uppercase tracking-wider mb-1">
-          {planningPhase === 'ready' ? 'Plan complete' : PHASE_LABELS[planningPhase]}
+          {planningPhase === 'ready'
+            ? 'Plan complete'
+            : (settings.predictionTarget === 'destination' && DEST_PHASE_LABELS[planningPhase])
+              || PHASE_LABELS[planningPhase]}
         </p>
         {steps.map(s => (
           <div key={s.label}>

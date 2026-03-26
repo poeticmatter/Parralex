@@ -4,7 +4,7 @@ import {
   hexToPixel, hexPolygonPoints, getAllHexes, HEX_RADIUS,
   squareToPixel, squarePolygonPoints, getAllSquares, SQUARE_RADIUS,
 } from '../lib/hexGrid'
-import { obstacleSet, validNeighbors } from '../lib/hexGameLogic'
+import { obstacleSet, validNeighbors, reachableDestinations } from '../lib/hexGameLogic'
 import type { PlanningPhase, DraftPlan } from './PlanningPanel'
 
 const HEX_SIZE    = 38
@@ -55,6 +55,13 @@ function getValidTargets(
   switch (phase) {
     case 'move_step1': {
       const opponentKey = hexKey(opponentPos)
+      if (settings.predictionTarget === 'destination') {
+        // Block opponent so paths through them are excluded
+        const blockedWithOpponent = new Set([...blocked, opponentKey])
+        return new Set(
+          reachableDestinations(myPos, blockedWithOpponent, gridType, settings.moveSteps).map(hexKey)
+        )
+      }
       return new Set(
         validNeighbors(myPos, blocked, gridType)
           .filter(h => hexKey(h) !== opponentKey)
@@ -71,6 +78,9 @@ function getValidTargets(
       )
     }
     case 'predict_step1': {
+      if (settings.predictionTarget === 'destination') {
+        return new Set(reachableDestinations(opponentPos, blocked, gridType, settings.moveSteps).map(hexKey))
+      }
       return new Set(validNeighbors(opponentPos, blocked, gridType).map(hexKey))
     }
     case 'predict_step2': {

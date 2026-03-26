@@ -61,10 +61,11 @@ const EMPTY_DRAFT: DraftPlan = {
 }
 
 function nextPhase(draft: DraftPlan, settings: GameSettings, isChaser: boolean): PlanningPhase {
+  const useStep2 = settings.moveSteps === 2 && settings.predictionTarget !== 'destination'
   if (!draft.moveStep1) return 'move_step1'
-  if (settings.moveSteps === 2 && !draft.moveStep2) return 'move_step2'
+  if (useStep2 && !draft.moveStep2) return 'move_step2'
   if (!draft.predictStep1) return 'predict_step1'
-  if (settings.moveSteps === 2 && !draft.predictStep2) return 'predict_step2'
+  if (useStep2 && !draft.predictStep2) return 'predict_step2'
   if (!isChaser && settings.predictionOutcome === 'asymmetric' && !draft.bonusMove) return 'bonus_move'
   return 'ready'
 }
