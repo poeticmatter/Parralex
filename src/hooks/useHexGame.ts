@@ -18,7 +18,10 @@ function buildInitialState(settings: GameSettings): GameState {
     phase: 'planning',
     turn: 1,
     winner: null,
-    obstacles: generateObstacles(chaserPos, evaderPos, settings.gridType),
+    obstacles: generateObstacles(
+      chaserPos, evaderPos, settings.gridType,
+      settings.evaderObjective === 'collect' ? COLLECTIBLE_TOKENS : [],
+    ),
     p1Plan: null,
     p2Plan: null,
     lastResolution: null,

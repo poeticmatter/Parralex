@@ -70,10 +70,12 @@ export function generateObstacles(
   chaserPos: HexCoord,
   evaderPos: HexCoord,
   gridType: 'hex' | 'square' = 'hex',
+  reservedCells: HexCoord[] = [],
 ): HexCoord[] {
   const allCells = getAllCells(gridType)
   const directions = getDirections(gridType)
   const radius = gridType === 'square' ? SQUARE_RADIUS : HEX_RADIUS
+  const reservedKeys = new Set(reservedCells.map(({ q, r }) => `${q},${r}`))
 
   const candidates = allCells.filter(({ q, r }) => {
     // For square grids use Chebyshev distance so only the literal perimeter row/column
@@ -83,7 +85,8 @@ export function generateObstacles(
       : cellDistance(0, 0, q, r, gridType) < radius
     const clearOfChaser = cellDistance(q, r, chaserPos.q, chaserPos.r, gridType) > 2
     const clearOfEvader = cellDistance(q, r, evaderPos.q, evaderPos.r, gridType) > 2
-    return notOnPerimeter && clearOfChaser && clearOfEvader
+    const clearOfReserved = !reservedKeys.has(`${q},${r}`)
+    return notOnPerimeter && clearOfChaser && clearOfEvader && clearOfReserved
   })
 
   // Fisher-Yates shuffle
