@@ -99,6 +99,7 @@ function GameView({
     useHexGame(roomCode, playerRole, hostSettings)
 
   const [draft, setDraft] = useState<DraftPlan>(EMPTY_DRAFT)
+  const [showCoords, setShowCoords] = useState(false)
 
   const isChaser = playerRole === 1
 
@@ -158,6 +159,16 @@ function GameView({
         }`}>
           {isChaser ? 'Chaser' : 'Evader'}
         </span>
+        <button
+          onClick={() => setShowCoords(v => !v)}
+          className={`text-xs px-2 py-1 rounded border transition-colors ${
+            showCoords
+              ? 'bg-neutral-700 text-neutral-200 border-neutral-600'
+              : 'bg-neutral-900 text-neutral-600 border-neutral-800 hover:text-neutral-400'
+          }`}
+        >
+          coords
+        </button>
       </div>
 
       <HexBoard
@@ -168,6 +179,7 @@ function GameView({
         isChaser={isChaser}
         obstacles={gameState.obstacles}
         collectibleTokens={gameState.collectibleTokens}
+        showCoords={showCoords}
         planningPhase={planningPhase}
         draft={draft}
         waitingForPartner={waitingForPartner}

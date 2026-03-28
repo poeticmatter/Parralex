@@ -11,12 +11,12 @@ export const TOKENS_NEEDED = 4
 // Fixed positions closer to the chaser spawn (-3,0) than the evader spawn (3,0).
 // Spread across the chaser's half so the chaser faces a defender-vs-pursuer dilemma.
 export const COLLECTIBLE_TOKENS: HexCoord[] = [
-  { q: -4, r:  1 },  // far-left edge
-  { q: -2, r: -2 },  // upper-left zone
-  { q: -1, r: -3 },  // upper zone, off-center
-  { q: -3, r:  4 },  // lower-left corner
-  { q: -2, r:  2 },  // lower-left center
-  { q: -1, r: -1 },  // center-left
+  { q:  1, r: -2 },
+  { q:  0, r: -4 },
+  { q: -3, r:  4 },
+  { q: -1, r:  1 },
+  { q: -4, r:  2 },
+  { q: -2, r: -1 },
 ]
 
 // ── Starting positions ─────────────────────────────────────────────────────

@@ -20,9 +20,9 @@ export interface GameSettings {
 export const DEFAULT_SETTINGS: GameSettings = {
   gridType: 'hex',
   moveSteps: 2,
-  predictionTarget: 'direction',
-  predictionOutcome: 'freeze-both',
-  evaderObjective: 'survive',
+  predictionTarget: 'destination',
+  predictionOutcome: 'bonus-both',
+  evaderObjective: 'collect',
 }
 
 /** A submitted plan for one turn. */

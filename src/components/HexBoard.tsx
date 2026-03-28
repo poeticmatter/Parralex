@@ -114,6 +114,7 @@ interface Props {
   waitingForPartner: boolean
   winner: 'chaser' | 'evader' | null
   settings: GameSettings
+  showCoords: boolean
   onHexClick: (hex: HexCoord) => void
 }
 
@@ -130,6 +131,7 @@ export function HexBoard({
   waitingForPartner,
   winner,
   settings,
+  showCoords,
   onHexClick,
 }: Props) {
   const { width: svgWidth, height: svgHeight, offsetX, offsetY } = boardDimensions(settings)
@@ -200,16 +202,29 @@ export function HexBoard({
           else if (isValid)      { stroke = '#60a5fa'; strokeWidth = 1.5 }
 
           return (
-            <polygon
-              key={key}
-              points={cellPolygonPoints(cx, cy, settings)}
-              fill={fill}
-              stroke={stroke}
-              strokeWidth={strokeWidth}
-              strokeOpacity={isValid ? 0.9 : 1}
-              style={{ cursor: isValid ? 'pointer' : 'default' }}
-              onClick={() => isValid && onHexClick({ q, r })}
-            />
+            <g key={key} style={{ cursor: isValid ? 'pointer' : 'default' }} onClick={() => isValid && onHexClick({ q, r })}>
+              <polygon
+                points={cellPolygonPoints(cx, cy, settings)}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeOpacity={isValid ? 0.9 : 1}
+              />
+              {showCoords && (
+                <text
+                  x={cx}
+                  y={cy + 1}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={settings.gridType === 'square' ? 11 : 10}
+                  fontWeight="600"
+                  fill={isObstacle ? '#a87070' : '#a0a0a0'}
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  {q},{r}
+                </text>
+              )}
+            </g>
           )
         })}
 
